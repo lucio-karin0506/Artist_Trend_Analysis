@@ -3,7 +3,7 @@ import pylast
 
 import pandas as pd
 
-import multiprocessing
+import parmap
 
 from auto_tqdm import tqdm
 
@@ -30,7 +30,7 @@ class LastFm:
                         )
         
         
-    def get_artist_list(self, artist_cnt=50, tag='all', artist_list=[]) -> list:
+    def get_artist_list(self, artist_cnt=50, tag='all') -> list:
         '''전체 또는 특정 카테고리의 아티스트명 가져옴
 
             @Args:
@@ -43,24 +43,17 @@ class LastFm:
             @Returns:
                 -top_artist_list: 아티스트 이름 리스트
         '''
+        if tag == 'all':
+            top_artists = self.network.get_top_artists(limit=artist_cnt)
+            top_artist_list = [top_artist.item.name for top_artist in top_artists]
 
-        if artist_list == []:
-            if tag == 'all':
-                top_artists = self.network.get_top_artists(limit=artist_cnt)
-                self.top_artist_list = [top_artist.item.name for top_artist in top_artists]
-
-                return self.top_artist_list
-            
-            else:
-                tag = pylast.Tag(tag, self.network)
-                self.top_artist_list = [artist.item.name for artist in tag.get_top_artists(limit=artist_cnt)]
-
-                return self.top_artist_list
-            
+            return top_artist_list
+        
         else:
-            self.top_artist_list = artist_list
+            tag = pylast.Tag(tag, self.network)
+            top_artist_list = [artist.item.name for artist in tag.get_top_artists(limit=artist_cnt)]
 
-            return self.top_artist_list
+            return top_artist_list
             
 
     def _get_artist_album_info(self, artist_name: str, album_cnt: int) -> pd.DataFrame:
@@ -109,22 +102,26 @@ class LastFm:
     
 
     @how_long
-    def get_album_info(self, album_cnt=5, multi_mode=True):
+    def get_album_info(self, top_artist_list: list, album_cnt=5, multi_mode=True):
 
         '''단일 아티스트 앨범 정보 병합 & 최종 앨범 정보 가져옴
 
             @Args:
-                -album_cnt: 가져올 앨범 수
+                -top_artist_list: 앨범 정보 가져올 대상 아티스트 리스트
 
-                - multi_mode: multi process 사용 여부
+                -album_cnt: 가져올 앨범 수
 
             @Returns:
                 -album_info_df: 아티스트 앨범 상세 데이터
         
         '''
         if multi_mode:
-            with multiprocessing.Pool(processes=6) as pool:
-                single_artist_album_df = pool.starmap(self._get_artist_album_info, [(artist_name, album_cnt) for artist_name in tqdm(self.top_artist_list)])
+            single_artist_album_df = parmap.starmap(
+                                            self._get_artist_album_info, 
+                                            [(artist_name, album_cnt) for artist_name in top_artist_list],
+                                            pm_pbar=True,
+                                            pm_processes=6
+                                        )
 
             album_info_df = pd.concat(single_artist_album_df, ignore_index=True)
 
@@ -132,7 +129,7 @@ class LastFm:
         
         else:
             album_info_df_list = []
-            for artist_name in tqdm(self.top_artist_list):
+            for artist_name in tqdm(top_artist_list):
                 single_artist_album_df = self._get_artist_album_info(artist_name, album_cnt)
                 album_info_df_list.append(single_artist_album_df)
 
@@ -148,9 +145,11 @@ if __name__ == '__main__':
 
     last_fm = LastFm(acc_info=last_fm_acc_info)
 
-    artist_list = last_fm.get_artist_list(artist_cnt=100, tag='k-pop', artist_list=['Seventeen', 'NewJeans', 'aespa', 'LE SSERAFIM', 'Kiss Of Life', 'Illit'])
-
+    # 1. 대상 아티스트 선언
+    # artist_list = last_fm.get_artist_list(artist_cnt=5, tag='k-pop')
+    artist_list = ['Seventeen', 'NewJeans', 'aespa', 'LE SSERAFIM', 'Kiss Of Life', 'Illit']
     print(artist_list)
 
-    album_info_df = last_fm.get_album_info(multi_mode=True)
+    # 2. 아티스트 앨범 정보
+    album_info_df = last_fm.get_album_info(top_artist_list=artist_list, album_cnt=10, multi_mode=True)
     print(album_info_df)
