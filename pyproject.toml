@@ -21,6 +21,7 @@ seaborn = "^0.13.2"
 plotly = "^5.22.0"
 ipykernel = "^6.29.4"
 musicbrainzngs = "^0.7.1"
+parmap = "^1.7.0"
 
 
 [build-system]
