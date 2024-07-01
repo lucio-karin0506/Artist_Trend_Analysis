@@ -111,6 +111,8 @@ class LastFm:
 
                 -album_cnt: 가져올 앨범 수
 
+                -multi_mode: multi process 실행 여부 설정
+
             @Returns:
                 -album_info_df: 아티스트 앨범 상세 데이터
         
