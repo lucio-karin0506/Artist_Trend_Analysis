@@ -22,6 +22,9 @@ plotly = "^5.22.0"
 ipykernel = "^6.29.4"
 musicbrainzngs = "^0.7.1"
 parmap = "^1.7.0"
+requests = "^2.32.3"
+beautifulsoup4 = "^4.12.3"
+selenium = "^4.22.0"
 
 
 [build-system]
