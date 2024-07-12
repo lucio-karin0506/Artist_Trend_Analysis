@@ -13,8 +13,6 @@ import sys
 sys.path.append(r'C:\lucio 서강대 정보통신대학원\학위논문\project')
 from runtime_check import how_long
 
-NUM_POOL = 6 # multi processing 실행할 코어 수
-
 # musicbrainz user agent 설정
 with open('account_info\musicbrainz_account_info.json', 'r') as file: musicbrainz_acc_info = json.load(file)
 musicbrainzngs.set_useragent(
@@ -22,6 +20,8 @@ musicbrainzngs.set_useragent(
                         musicbrainz_acc_info['version'],
                         musicbrainz_acc_info['mail']
                     )
+
+NUM_POOL = 6 # multi processing 실행할 코어 수
 
 
 def get_artist_info(artist_name: str) -> dict:
@@ -149,12 +149,47 @@ def get_album_info(artist_id: str) -> pd.DataFrame:
     return album_info_df
 
 
-def get_event_info():
-    pass
+def get_event_info(artist_id) -> pd.DataFrame:
+    '''특정 아티스트의 공연, 방송 정보 취합
+
+        @Args:
+            -artist_id: 아티스트 id
+
+        @Returns:
+            -artist_event_df: 아티스트의 공연 및 방송 상세 정보 데이터프레임
+    '''
+    
+    artist_event_info = musicbrainzngs.get_artist_by_id(artist_id, includes=['event-rels'])['artist']['event-relation-list']
+
+    artist_event_dic_list = []
+    for events in artist_event_info:
+
+        artist_event_dic = {}
+
+        # 아티스트 행사 참여 수준
+        participant_type = events['type']
+
+        # 행사명 및 종류
+        event_type = events['event']['type']; event_name = events['event']['name']
+
+        # 행사 시작 및 종료일
+        event_start_date = events['event']['life-span']['begin']; event_end_date = events['event']['life-span']['end']
+
+        artist_event_dic['participant_type'] = participant_type
+        artist_event_dic['event_name'] = event_name
+        artist_event_dic['event_type'] = event_type
+        artist_event_dic['event_begin_date'] = event_start_date
+        artist_event_dic['event_end_date'] = event_end_date
+
+        artist_event_dic_list.append(artist_event_dic)
+
+    artist_event_df = pd.DataFrame(artist_event_dic_list)
+
+    return artist_event_df
 
 
 @how_long
-def concat_artist_album_info(artist_list: list) -> pd.DataFrame:
+def concat_artist_info(artist_list: list) -> pd.DataFrame:
     '''아티스트 상세 정보 모두 취합
 
         @Args:
@@ -168,36 +203,51 @@ def concat_artist_album_info(artist_list: list) -> pd.DataFrame:
     '''
 
     # 아티스트 기본 정보
-    single_artist_info_dic = parmap.map(
-                                        get_artist_info,
-                                        artist_list,
-                                        pm_pbar=True,
-                                        pm_processes=NUM_POOL
-                                    )
+    artist_info_dic = parmap.map(
+                                get_artist_info,
+                                artist_list,
+                                pm_pbar=False,
+                                pm_processes=NUM_POOL
+                            )
     
-    artist_info_df = pd.DataFrame(single_artist_info_dic)
+    artist_info_df = pd.DataFrame(artist_info_dic)
 
-    # 앨범 상세 정보
-    album_info_df_list = []
+    # 앨범 상세 및 공연 이벤트 정보
+    album_info_df_list = []; event_info_df_list = []
     for artist_name, artist_id in zip(artist_info_df['artist_name'].unique(), artist_info_df['artist_id'].unique()):
+
         print(f'<<<<<<<<<<< {artist_name} >>>>>>>>>>>>')
 
+        # 1. 아티스트 앨범 정보
         album_info_df = get_album_info(artist_id)
         album_info_df['artist_id'] = artist_id
         album_info_df_list.append(album_info_df)
 
+        # 2. 공연, 방송 이벤트 정보
+        event_info_df = get_event_info(artist_id)
+        event_info_df['artist_id'] = artist_id
+        event_info_df_list.append(event_info_df)
+
     album_info_df = pd.concat(album_info_df_list)
+    event_info_df = pd.concat(event_info_df_list)
 
     # 최종 데이터 병합
-    artist_album_df = pd.merge(artist_info_df, album_info_df, on='artist_id', how='inner')
+    artist_album_df = pd.merge(artist_info_df, album_info_df, on='artist_id', how='inner').merge(event_info_df, on='artist_id', how='inner')
 
     return artist_album_df
     
 
 if __name__ == '__main__':
 
+    '''
+        Available includes:
+        recordings, releases, release-groups, works, various-artists, discids, media, isrcs, aliases, annotation, area-rels, artist-rels, label-rels, 
+        place-rels, event-rels, recording-rels, release-rels, release-group-rels, series-rels, url-rels, work-rels, instrument-rels, tags, user-tags, 
+        ratings, user-ratings
+    '''
+
     artist_list = ['SEVENTEEN', 'BTS', 'Stray Kids', 'NCT DREAM', 'TOMORROW X TOGETHER', 'IVE', 'aespa', 'NewJeans', 'TWICE', 'BLACKPINK']
 
-    artist_album_df = concat_artist_album_info(artist_list)
-    print(artist_album_df)
-    # artist_album_df.to_csv('top5_group_album_info.csv', encoding='utf-8-sig')
+    artist_info_df = concat_artist_info(artist_list)
+    print(artist_info_df)
+    # artist_info_df.to_csv('top5_group_info.csv', encoding='utf-8-sig')
