@@ -51,8 +51,8 @@ def get_google_trend(search_keyword, periods):
         period_item.click()
 
         time.sleep(2)
-        dropdown_period_item = driver.find_element(By.ID, 'select_container_11')
-        dropdown_period_item.find_element(By.ID, 'select_option_22').click()
+        dropdown_period_item = WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, '#select_container_11 md-option')))[-1]
+        dropdown_period_item.click()
 
         # 2. 시작 및 종료일 설정
         time.sleep(2)
@@ -108,7 +108,7 @@ def concat_google_trend():
 if __name__ == '__main__':
 
     # 아티스트 구글 트렌드 정보 get
-    search_keyword = 'IVE'
+    search_keyword = 'SEVENTEEN'
     periods = [
         ('2021. 11. 01', '2022. 05. 01'),
         ('2022. 05. 01', '2022. 11. 01'),
